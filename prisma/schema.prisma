@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 1. users
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  email            String    @unique
+  college          String
+  passwordHash     String
+  homeLocation     String?
+  isVerified       Boolean   @default(false)
+  collegeEmail     String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  rideRequests     RideRequest[]
+  groupMembers     RideGroupMember[]
+  commuteSchedules CommuteSchedule[]
+  trustScores      TrustScore[]
+  notifications    Notification[]
+  waitlists        Waitlist[]
+  refreshTokens    RefreshToken[]
+  savedRoutes      SavedRoute[]
+  favoritePartners FavoritePartner[]
+  chatMessages     GroupChatMessage[]
+
+  @@index([email])
+}
+
+// 2. ride_requests
+model RideRequest {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  pickupArea        String
+  destinationCampus String
+  departureTime     DateTime
+  flexibility       Int       @default(30)
+  vehicleType       String    @default("Any")
+  groupSize         Int       @default(3)
+  travelDays        String    @default("Mon,Tue,Wed,Thu,Fri")
+  recurringSchedule String    @default("Recurring")
+  status            String    @default("SEARCHING")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  groupId           String?
+  rideGroup         RideGroup? @relation(fields: [groupId], references: [id])
+  waitlists         Waitlist[]
+  waitlistNotifications WaitlistNotification[]
+
+  @@index([userId])
+  @@index([pickupArea, destinationCampus])
+}
+
+// 3. ride_groups
+model RideGroup {
+  id                String    @id @default(uuid())
+  pickupArea        String
+  destinationCampus String
+  departureTime     DateTime
+  matchScore        Float     @default(0.0)
+  travelDays        String    @default("Mon,Tue,Wed,Thu,Fri")
+  recurringSchedule String    @default("Recurring")
+  status            String    @default("FORMING")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  members           RideGroupMember[]
+  rideRequests      RideRequest[]
+  waitlists         Waitlist[]
+  chatMessages      GroupChatMessage[]
+  waitlistNotifications WaitlistNotification[]
+
+  @@index([pickupArea, destinationCampus])
+}
+
+// 4. ride_group_members
+model RideGroupMember {
+  id        String    @id @default(uuid())
+  groupId   String
+  userId    String
+  joinedAt  DateTime  @default(now())
+  deletedAt DateTime?
+
+  group     RideGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+// 5. commute_schedules
+model CommuteSchedule {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  daysOfWeek        String    // e.g. "Mon,Tue,Wed,Thu,Fri"
+  pickupArea        String
+  destinationCampus String
+  departureTime     String    // "08:30"
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  @@index([userId])
+}
+
+// 6. trust_scores
+model TrustScore {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  score             Int       @default(100)
+  metrics           String    @default("{}") // JSON string of specific metrics
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// 7. notifications
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  message   String
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([userId])
+}
+
+// 8. route_communities
+model RouteCommunity {
+  id                String    @id @default(uuid())
+  pickupArea        String
+  destinationCampus String
+  memberCount       Int       @default(0)
+  activeDemand      Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([pickupArea, destinationCampus])
+}
+
+// 9. analytics_events
+model AnalyticsEvent {
+  id          String    @id @default(uuid())
+  eventName   String
+  eventData   String    // JSON String
+  recordedAt  DateTime  @default(now())
+
+  @@index([eventName])
+}
+
+// 10. waitlists
+model Waitlist {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  requestId   String?
+  request     RideRequest? @relation(fields: [requestId], references: [id])
+  groupId     String?
+  group       RideGroup? @relation(fields: [groupId], references: [id])
+  status      String    @default("WAITING")
+  joinedAt    DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([userId])
+  @@index([groupId])
+}
+
+// NEW MODELS ADDED TO MATCH CODEBASE
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AnalyticsRecord {
+  id        String   @id @default(uuid())
+  type      String
+  payload   String   // JSON String
+  createdAt DateTime @default(now())
+
+  @@index([type])
+}
+
+model WaitlistNotification {
+  id        String      @id @default(uuid())
+  userId    String
+  type      String
+  message   String
+  requestId String?
+  request   RideRequest? @relation(fields: [requestId], references: [id])
+  groupId   String?
+  group     RideGroup?   @relation(fields: [groupId], references: [id])
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+}
+
+model GroupChatMessage {
+  id         String    @id @default(uuid())
+  groupId    String
+  group      RideGroup @relation(fields: [groupId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  senderName String
+  message    String
+  createdAt  DateTime  @default(now())
+
+  @@index([groupId])
+}
+
+model SavedRoute {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  name        String
+  origin      String
+  destination String
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model FavoritePartner {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  partnerId String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
